@@ -26,6 +26,42 @@
         }
         /* Custom styles for the PEE helpsheet */
         /* The main container already has Tailwind classes for gradient background, padding, and centering. */
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        .modal-close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .modal-close:hover,
+        .modal-close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -57,18 +93,33 @@
           </svg>
         );
 
-        // New Chat icon
         const MessageSquareIcon = () => (
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         );
 
+        // New icons for the new features
+        const SearchIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+        );
+
+        const MicroscopeIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-microscope">
+                <path d="M6 18h4"/><path d="M14 18h4"/><path d="M3 22h18"/><path d="M14 4h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1l-3 4V4h-3L3 9V6a2 2 0 0 1 2-2h1"/>
+                <path d="M12 11v9"/>
+            </svg>
+        );
+
+
         const App = () => {
           // State variables for inputs and outputs
           const [textExtract, setTextExtract] = React.useState('');
           const [question, setQuestion] = React.useState(''); // The GCSE question
           const [studentPEEAnswer, setStudentPEEAnswer] = React.useState(''); // Combined PEE input
+          const [pointForEvidence, setPointForEvidence] = React.useState(''); // New state for point to find evidence
 
           // State for tips and structured feedback
           const [pointTipsMessage, setPointTipsMessage] = React.useState('');
@@ -81,24 +132,39 @@
             grade: ''
           });
 
+          // New states for Find Evidence and Spot Features
+          const [suggestedEvidence, setSuggestedEvidence] = React.useState('');
+          const [identifiedFeatures, setIdentifiedFeatures] = React.useState('');
+
           // Chatbot states
           const [chatQuestion, setChatQuestion] = React.useState('');
           const [chatResponse, setChatResponse] = React.useState('');
-          const [loadingChat, setLoadingChat] = React.useState(false);
 
           // Loading states for API calls
           const [loadingPointTips, setLoadingPointTips] = React.useState(false);
           const [loadingEvidenceTips, setLoadingEvidenceTips] = React.useState(false);
           const [loadingExplanationTips, setLoadingExplanationTips] = React.useState(false);
           const [loadingFeedback, setLoadingFeedback] = React.useState(false);
+          const [loadingSuggestedEvidence, setLoadingSuggestedEvidence] = React.useState(false); // New loading state
+          const [loadingIdentifiedFeatures, setLoadingIdentifiedFeatures] = React.useState(false); // New loading state
+          const [loadingChat, setLoadingChat] = React.useState(false);
 
           const [copySuccessMessage, setCopySuccessMessage] = React.useState(''); // New state for copy feedback
+          const [showApiKeyModal, setShowApiKeyModal] = React.useState(false); // State for API key modal
 
           // Function to call the Gemini API
           const callGeminiApi = async (prompt, type, isStructured = false) => {
-            // Note: In a deployed environment, the API key might be loaded dynamically or from an environment variable.
-            // For this self-contained HTML, it's left blank as per instructions.
-            const apiKey = "AIzaSyBZvqlISyzI2Y-AUwQ1HdJSEFVbbTy5FRQ";
+            // IMPORTANT: Replace "YOUR_GEMINI_API_KEY" with your actual Gemini API Key.
+            // You can get one from Google AI Studio: https://aistudio.google.com/app/apikey
+            const apiKey = "AIzaSyBZvqlISyzI2Y-AUwQ1HdJSEFVbbTy5FRQ"; 
+
+            if (apiKey === "YOUR_GEMINI_API_KEY" || apiKey.trim() === "") {
+                console.error("API Key is missing. Please replace 'YOUR_GEMINI_API_KEY' with your actual key.");
+                setShowApiKeyModal(true); // Show the modal
+                // Return a dummy response or error to prevent further execution
+                return isStructured ? { feedback: "API Key is missing. Please add your key to the code.", suggestions: "Obtain a Gemini API key from Google AI Studio and replace 'YOUR_GEMINI_API_KEY' in the source code.", grade: "N/A" } : "API Key is missing. Please add your key to the code.";
+            }
+
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             let payload = {
@@ -128,7 +194,10 @@
               });
 
               if (!response.ok) {
-                throw new Error(`API error: ${response.status} ${response.statusText}`);
+                const errorData = await response.json();
+                console.error(`API error: ${response.status} ${response.statusText}`, errorData);
+                // Return a user-friendly error message, incorporating backend error details if available
+                return `Error: API request failed. Status: ${response.status}. Message: ${errorData.error.message || 'Unknown error.'}`;
               }
 
               const result = await response.json();
@@ -157,17 +226,17 @@
 
               } else {
                 console.error("Unexpected API response structure:", result);
-                return `Error: Could not get ${type} from API. Please try again.`;
+                return `Error: Could not get ${type} from API. Please try again. (Empty/malformed response)`;
               }
             } catch (error) {
               console.error(`Error calling Gemini API for ${type}:`, error);
-              return `Error: Failed to get ${type}. Please check your input or try again later.`;
+              return `Error: Failed to get ${type}. Please check your input or try again later. Details: ${error.message}`;
             }
           };
 
-          // Helper to format tips with clear subheadings
-          const formatTipsForDisplay = (tipsText) => {
-            return tipsText.split('\n').map((line, index) => {
+          // Helper to format text with clear subheadings (used for tips and other multi-line responses)
+          const formatTextWithSubheadings = (text) => {
+            return text.split('\n').map((line, index) => {
               if (line.startsWith('### ')) {
                 return <h4 key={index} className="font-semibold text-gray-700 mt-4 mb-2">{line.substring(4)}</h4>;
               }
@@ -194,7 +263,7 @@
             setLoadingPointTips(true);
             setPointTipsMessage('Thinking of some helpful tips...');
 
-            const prompt = `Given the following English Language text extract and question, provide concise tips for a GCSE student on how to identify strong 'Points' for their PEE analysis. Organize these tips under clear subheadings like '### Characteristics of a Strong Point', '### Connecting to the Question', and '### What to Avoid'. Use bullet points for individual tips within each subheading.
+            const prompt = `Given the following English Language text extract and question, provide concise tips for a GCSE student on how to identify strong 'Points' for their PEE analysis. Respond in British English. Organize these tips under clear subheadings like '### Characteristics of a Strong Point', '### Connecting to the Question', and '### What to Avoid'. Use bullet points for individual tips within each subheading.
 
             Text Extract:
             "${textExtract}"
@@ -221,7 +290,7 @@
             setLoadingEvidenceTips(true);
             setEvidenceTipsMessage('Searching for evidence tips...');
 
-            const prompt = `Given the following English Language text extract, question, and the student's current PEE answer (specifically focusing on their point), provide concise tips for a GCSE student on how to select strong 'Evidence' (direct quotes) to support their point. Organize these tips under subheadings like '### Choosing the Right Quote', '### Integrating Evidence', and '### Common Mistakes'. Use bullet points for individual tips.
+            const prompt = `Given the following English Language text extract, question, and the student's current PEE answer (specifically focusing on their point), provide concise tips for a GCSE student on how to select strong 'Evidence' (direct quotes) to support their point. Respond in British English. Organize these tips under subheadings like '### Choosing the Right Quote', '### Integrating Evidence', and '### Common Mistakes'. Use bullet points for individual tips.
             
             Text Extract:
             "${textExtract}"
@@ -251,7 +320,7 @@
             setLoadingExplanationTips(true);
             setExplanationTipsMessage('Generating explanation tips...');
 
-            const prompt = `Given the following English Language text extract, question, and the student's current PEE answer (specifically focusing on their point and evidence), provide concise tips for a GCSE student on how to write a strong 'Explanation'. Organize these tips under subheadings like '### Deepening Analysis', '### Linking to Methods & Effect', and '### What to Elaborate On'. Use bullet points for individual tips.
+            const prompt = `Given the following English Language text extract, question, and the student's current PEE answer (specifically focusing on their point and evidence), provide concise tips for a GCSE student on how to write a strong 'Explanation'. Respond in British English. Organize these tips under subheadings like '### Deepening Analysis', '### Linking to Methods & Effect', and '### What to Elaborate On'. Use bullet points for individual tips.
             
             Text Extract:
             "${textExtract}"
@@ -266,7 +335,6 @@
             setExplanationTipsMessage(tips);
             setLoadingExplanationTips(false);
           };
-
 
           // Handle getting feedback
           const handleGetFeedback = async () => {
@@ -286,20 +354,42 @@
               grade: ''
             });
 
-            const prompt = `A GCSE English Language student has provided a full PEE answer. Provide constructive feedback on their attempt, specifically aligning with **WJEC Eduqas GCSE English Language mark scheme criteria for a 10-mark question (e.g., Q2/Q3 on Language/Structure)**. Structure your response as a JSON object with three fields: 'feedback', 'suggestions', and 'grade'.
+            // Eduqas mark scheme criteria details directly embedded in the prompt
+            const eduqasCriteria = `
+            WJEC Eduqas GCSE English Language 10-mark question criteria:
+
+            AO1 (Select & Synthesise Evidence):
+            - Top Band (e.g., Grade 9-7): Perceptive selection of textual detail; assured integration.
+            - Mid Band (e.g., Grade 6-4): Clear selection of textual detail; generally appropriate integration.
+            - Low Band (e.g., Grade 3-1): Simple/limited selection of textual detail; little integration.
+
+            AO2 (Analyse Language/Structure, Effects, Terminology):
+            - Top Band (e.g., Grade 9-7): Perceptive analysis of language/structure; sophisticated understanding of effects; precise, sophisticated subject terminology.
+            - Mid Band (e.g., Grade 6-4): Clear analysis of language/structure; clear understanding of effects; generally appropriate subject terminology.
+            - Low Band (e.g., Grade 3-1): Simple/general comments on language/structure; limited understanding of effects; limited/basic subject terminology.
+
+            AO4 (Evaluate):
+            - Top Band (e.g., Grade 9-7): Convincing evaluation of effects, sustained and perceptive.
+            - Mid Band (e.g., Grade 6-4): Clear evaluation of effects, generally clear.
+            - Low Band (e.g., Grade 3-1): Simple/limited evaluation of effects.
+            `;
+
+
+            const prompt = `A GCSE English Language student has provided a full PEE answer. Provide constructive feedback on their attempt, specifically aligning with **WJEC Eduqas GCSE English Language mark scheme criteria for a 10-mark question (e.g., Q2/Q3 on Language/Structure)**. Respond in British English. Refer directly to the provided Eduqas criteria in your assessment. Structure your response as a JSON object with three fields: 'feedback', 'suggestions', and 'grade'.
 
             For 'feedback':
-            - Focus on AO1 (identifying/selecting evidence), AO2 (analysing language/structure, effects, subject terminology), and AO4 (evaluating).
-            - Comment on the clarity and precision of the 'Point'.
-            - Assess the relevance and accuracy of the 'Evidence'.
-            - Evaluate the depth of analysis in the 'Explanation', particularly regarding the identification of writer's methods and their effects on the reader, and the use of subject terminology.
+            - Evaluate the student's performance against AO1, AO2, and AO4 as described in the Eduqas criteria.
+            - Comment on the clarity and precision of their 'Point', the relevance and accuracy of the 'Evidence' selected, and the depth of analysis in the 'Explanation' regarding writer's methods, effects on the reader, and use of subject terminology.
+            - Use terms from the Eduqas mark scheme (e.g., 'perceptive', 'clear', 'limited', 'sophisticated', 'appropriate subject terminology', 'evaluates effects').
 
             For 'suggestions':
-            - Offer clear, actionable advice for improvement, linked to the Eduqas AOs.
-            - Suggest how to strengthen analysis, integrate evidence more smoothly, or expand on effects.
+            - Offer clear, actionable advice for improvement, directly referencing how to achieve higher levels within the Eduqas AOs.
+            - For example, if AO2 is weak, suggest specific ways to deepen analysis of methods or expand on effects.
 
             For 'grade':
-            - Assign a **GCSE-style grade (e.g., "Grade 4", "Grade 6", "Grade 9")** based on the overall quality, depth, and clarity of the PEE answer as per Eduqas expectations. Justify the grade briefly based on performance against AOs.
+            - Assign a **GCSE-style grade (e.g., "Grade 4", "Grade 6", "Grade 9")** based on the overall quality, depth, and clarity of the PEE answer as per Eduqas expectations. Justify the grade briefly by summarizing performance against the key Eduqas AOs.
+
+            ${eduqasCriteria}
 
             Text Extract:
             "${textExtract}"
@@ -384,7 +474,7 @@ ${feedbackResponse.grade || 'N/A'}
             setLoadingChat(true);
             setChatResponse('Thinking...');
 
-            const chatPrompt = `You are an expert English Language teacher. A student has provided an extract and has a question about it. Your task is to answer the question *strictly* based on the provided text extract and literary/language techniques used within it. If the question is outside the scope of the provided text or its techniques, politely decline and explain that you can only answer questions related to the given text and its analysis.
+            const chatPrompt = `You are an expert English Language teacher focusing on **WJEC Eduqas GCSE English Language**. A student has provided an extract and has a question about it. Your task is to answer the question *strictly* based on the provided text extract and literary/language techniques used within it. Respond in British English. If the question is outside the scope of the provided text or its techniques, politely decline and explain that you can only answer questions related to the given text and its analysis. Reference Eduqas-relevant terms and concepts if appropriate.
 
             Text Extract:
             "${textExtract}"
@@ -402,6 +492,65 @@ ${feedbackResponse.grade || 'N/A'}
             setLoadingChat(false);
           };
 
+          // New feature: Handle finding evidence for a given point
+          const handleFindEvidence = async () => {
+            if (!textExtract || !question || !pointForEvidence) { // Added !question to the condition
+              setSuggestedEvidence('Please provide the text extract, the question, and your point to find evidence.');
+              return;
+            }
+
+            setLoadingSuggestedEvidence(true);
+            setSuggestedEvidence('Searching for relevant evidence...');
+
+            try { 
+                const prompt = `Given the following English Language text extract and a student's point, identify **one or two key short quotes** that best serve as 'Evidence' for that point. Respond in British English. Also, briefly explain *why* each quote is effective evidence for the point, considering its direct relevance and potential for analysis. Prioritize strong, concise textual details.
+
+                Text Extract:
+                "${textExtract}"
+
+                Student's Point:
+                "${pointForEvidence}"
+
+                Suggested Evidence (and brief explanation of why it's effective):`;
+
+                const evidence = await callGeminiApi(prompt, "suggested evidence");
+                setSuggestedEvidence(evidence);
+            } catch (error) {
+                console.error("Error in handleFindEvidence:", error);
+                setSuggestedEvidence(`Failed to get evidence: ${error.message || 'An unknown error occurred.'}`);
+            } finally {
+                setLoadingSuggestedEvidence(false);
+            }
+          };
+
+          // New feature: Handle spotting key features
+          const handleSpotKeyFeatures = async () => {
+            if (!textExtract || !question) { // Added !question to the condition
+              setIdentifiedFeatures('Please provide the text extract and the question to spot key features.');
+              return;
+            }
+
+            setLoadingIdentifiedFeatures(true);
+            setIdentifiedFeatures('Analysing text for key features...');
+
+            try { 
+                const prompt = `You are an expert English Language teacher. Given the following text extract, identify and list **significant language and structural features** that a GCSE student could analyze. Respond in British English. For each feature, provide a brief example from the text (if applicable) and a very short explanation of its general effect or purpose in a literary context. Categorize them under 'Language Features' and 'Structural Features'. Consider the context of the question: "${question}".
+
+                Text Extract:
+                "${textExtract}"
+
+                Identified Features:`;
+
+                const features = await callGeminiApi(prompt, "identified features");
+                setIdentifiedFeatures(features);
+            } catch (error) {
+                console.error("Error in handleSpotKeyFeatures:", error);
+                setIdentifiedFeatures(`Failed to identify features: ${error.message || 'An unknown error occurred.'}`);
+            } finally {
+                setLoadingIdentifiedFeatures(false);
+            }
+          };
+
 
           return (
             <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-6 flex items-center justify-center font-inter antialiased">
@@ -411,6 +560,32 @@ ${feedbackResponse.grade || 'N/A'}
                     GCSE PEE Helpsheet
                   </span>
                 </h1>
+
+                {/* API Key Modal */}
+                {showApiKeyModal && (
+                    <div className="modal">
+                        <div className="modal-content">
+                            <span className="modal-close" onClick={() => setShowApiKeyModal(false)}>&times;</span>
+                            <h2 className="text-xl font-bold text-red-600 mb-4">API Key Missing!</h2>
+                            <p className="mb-4">To use the AI-powered features (tips, feedback, chatbot), you need to provide a Gemini API Key.</p>
+                            <p className="mb-4 font-semibold">Please follow these steps:</p>
+                            <ol className="list-decimal list-inside text-left mb-4 space-y-2">
+                                <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio (aistudio.google.com/app/apikey)</a>.</li>
+                                <li>Generate a new API key.</li>
+                                <li>Copy the generated API key.</li>
+                                <li>In the source code of this HTML file, find the line: <code className="bg-gray-200 p-1 rounded">const apiKey = "AIzaSyBZvqlISyzI2Y-AUwQ1HdJSEFVbbTy5FRQ";</code></li>
+                                <li>Replace <code className="bg-gray-200 p-1 rounded">"AIzaSyBZvqlISyzI2Y-AUwQ1HdJSEFVbbTy5FRQ"</code> with your copied API key (keep the quotation marks!).</li>
+                                <li>Save the HTML file and refresh your browser.</li>
+                            </ol>
+                            <button
+                                onClick={() => setShowApiKeyModal(false)}
+                                className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out"
+                            >
+                                Got It!
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Input Section */}
                 <div className="bg-gray-50 p-6 rounded-lg shadow-inner border border-gray-200">
@@ -442,6 +617,73 @@ ${feedbackResponse.grade || 'N/A'}
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
                       />
+                    </div>
+
+                    {/* New LLM Features: Find Evidence and Spot Features within this section */}
+                    <div className="space-y-4 pt-4 border-t border-gray-200">
+                        <h3 className="text-xl font-semibold text-gray-700 flex items-center">
+                            <span className="mr-2 text-yellow-500">✨</span> Explore & Discover Tools
+                        </h3>
+                        {/* Find Evidence Section */}
+                        <div>
+                            <label htmlFor="point-for-evidence" className="block text-gray-700 text-sm font-medium mb-1">
+                                Your Point (to find supporting evidence):
+                            </label>
+                            <input
+                                type="text"
+                                id="point-for-evidence"
+                                className="w-full p-3 border border-yellow-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500"
+                                placeholder="E.g., 'The writer uses imagery to create a sense of decay.'"
+                                value={pointForEvidence}
+                                onChange={(e) => setPointForEvidence(e.target.value)}
+                            />
+                            <button
+                                onClick={handleFindEvidence}
+                                className="mt-2 w-full sm:w-auto px-6 py-2 bg-yellow-600 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center"
+                                disabled={loadingSuggestedEvidence || !textExtract || !question || !pointForEvidence}
+                            >
+                                {loadingSuggestedEvidence ? (
+                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <SearchIcon className="mr-2" />
+                                )}
+                                ✨ Find Evidence for my Point
+                            </button>
+                            {suggestedEvidence && (
+                                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md">
+                                    <h3 className="font-semibold mb-2">Suggested Evidence:</h3>
+                                    <div className="whitespace-pre-wrap">{formatTextWithSubheadings(suggestedEvidence)}</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Spot Key Features Button */}
+                        <div>
+                            <button
+                                onClick={handleSpotKeyFeatures}
+                                className="w-full sm:w-auto px-6 py-2 bg-pink-600 text-white font-semibold rounded-lg shadow-md hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center"
+                                disabled={loadingIdentifiedFeatures || !textExtract || !question}
+                            >
+                                {loadingIdentifiedFeatures ? (
+                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <MicroscopeIcon className="mr-2" />
+                                )}
+                                ✨ Spot Key Features in Text
+                            </button>
+                            {identifiedFeatures && (
+                                <div className="mt-4 p-4 bg-pink-50 border border-pink-200 text-pink-800 rounded-md">
+                                    <h3 className="font-semibold mb-2">Identified Features:</h3>
+                                    <div className="whitespace-pre-wrap">{formatTextWithSubheadings(identifiedFeatures)}</div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -526,19 +768,19 @@ You can write multiple PEE paragraphs here."
                       {pointTipsMessage && (
                         <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-md">
                           <h3 className="font-semibold mb-2">Tips for Your Point:</h3>
-                          <div className="whitespace-pre-wrap">{formatTipsForDisplay(pointTipsMessage)}</div>
+                          <div className="whitespace-pre-wrap">{formatTextWithSubheadings(pointTipsMessage)}</div>
                         </div>
                       )}
                        {evidenceTipsMessage && (
                         <div className="mt-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-md">
                           <h3 className="font-semibold mb-2">Tips for Your Evidence:</h3>
-                          <div className="whitespace-pre-wrap">{formatTipsForDisplay(evidenceTipsMessage)}</div>
+                          <div className="whitespace-pre-wrap">{formatTextWithSubheadings(evidenceTipsMessage)}</div>
                         </div>
                       )}
                       {explanationTipsMessage && (
                         <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-md">
                           <h3 className="font-semibold mb-2">Tips for Your Explanation:</h3>
-                          <div className="whitespace-pre-wrap">{formatTipsForDisplay(explanationTipsMessage)}</div>
+                          <div className="whitespace-pre-wrap">{formatTextWithSubheadings(explanationTipsMessage)}</div>
                         </div>
                       )}
                     </div>
