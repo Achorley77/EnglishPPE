@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCSE PEE Helpsheet</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- React and ReactDOM CDNs -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- jspdf and html2canvas CDNs for potential PDF functionality (though currently disabled in React logic) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        /* Custom styles for the PEE helpsheet */
+        /* The main container already has Tailwind classes for gradient background, padding, and centering. */
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const LightbulbIcon = () => (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lightbulb">
+            <path d="M15 14v0a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v0a7 7 0 0 0 6 7 7 7 0 0 0 6-7Z"/>
+            <path d="M9 11V5a3 3 0 0 1 6 0v6"/>
+            <path d="M11 22h2"/>
+            <path d="M12 11V2"/>
+          </svg>
+        );
+
+        const MessageCircleIcon = () => (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle-more">
+            <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+            <path d="M8 12h.01"/>
+            <path d="M12 12h.01"/>
+            <path d="M16 12h.01"/>
+          </svg>
+        );
+
+        const CopyIcon = () => (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
+            <rect width="8" height="14" x="8" y="2" rx="2" ry="2"/>
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+          </svg>
+        );
+
+        // New Chat icon
+        const MessageSquareIcon = () => (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        );
+
+        const App = () => {
+          // State variables for inputs and outputs
+          const [textExtract, setTextExtract] = React.useState('');
+          const [question, setQuestion] = React.useState(''); // The GCSE question
+          const [studentPEEAnswer, setStudentPEEAnswer] = React.useState(''); // Combined PEE input
+
+          // State for tips and structured feedback
+          const [pointTipsMessage, setPointTipsMessage] = React.useState('');
+          const [evidenceTipsMessage, setEvidenceTipsMessage] = React.useState('');
+          const [explanationTipsMessage, setExplanationTipsMessage] = React.useState('');
+          
+          const [feedbackResponse, setFeedbackResponse] = React.useState({
+            feedback: '',
+            suggestions: '',
+            grade: ''
+          });
+
+          // Chatbot states
+          const [chatQuestion, setChatQuestion] = React.useState('');
+          const [chatResponse, setChatResponse] = React.useState('');
+          const [loadingChat, setLoadingChat] = React.useState(false);
+
+          // Loading states for API calls
+          const [loadingPointTips, setLoadingPointTips] = React.useState(false);
+          const [loadingEvidenceTips, setLoadingEvidenceTips] = React.useState(false);
+          const [loadingExplanationTips, setLoadingExplanationTips] = React.useState(false);
+          const [loadingFeedback, setLoadingFeedback] = React.useState(false);
+
+          const [copySuccessMessage, setCopySuccessMessage] = React.useState(''); // New state for copy feedback
+
+          // Function to call the Gemini API
+          const callGeminiApi = async (prompt, type, isStructured = false) => {
+            // Note: In a deployed environment, the API key might be loaded dynamically or from an environment variable.
+            // For this self-contained HTML, it's left blank as per instructions.
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            let payload = {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+            };
+
+            if (isStructured) {
+              payload.generationConfig = {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: "OBJECT",
+                  properties: {
+                    "feedback": { "type": "STRING" },
+                    "suggestions": { "type": "STRING" },
+                    "grade": { "type": "STRING" }
+                  },
+                  "propertyOrdering": ["feedback", "suggestions", "grade"]
+                }
+              };
+            }
+
+            try {
+              const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+
+              if (!response.ok) {
+                throw new Error(`API error: ${response.status} ${response.statusText}`);
+              }
+
+              const result = await response.json();
+
+              if (result.candidates && result.candidates.length > 0 &&
+                  result.candidates[0].content && result.candidates[0].content.parts &&
+                  result.candidates[0].content.parts.length > 0) {
+                
+                const responseText = result.candidates[0].content.parts[0].text;
+                
+                if (isStructured) {
+                  try {
+                    const parsedJson = JSON.parse(responseText);
+                    return parsedJson;
+                  } catch (jsonError) {
+                    console.error("Failed to parse JSON response:", responseText, jsonError);
+                    return {
+                      feedback: `Error: Failed to parse structured feedback. Raw response: ${responseText}`,
+                      suggestions: '',
+                      grade: 'N/A'
+                    };
+                  }
+                } else {
+                  return responseText;
+                }
+
+              } else {
+                console.error("Unexpected API response structure:", result);
+                return `Error: Could not get ${type} from API. Please try again.`;
+              }
+            } catch (error) {
+              console.error(`Error calling Gemini API for ${type}:`, error);
+              return `Error: Failed to get ${type}. Please check your input or try again later.`;
+            }
+          };
+
+          // Helper to format tips with clear subheadings
+          const formatTipsForDisplay = (tipsText) => {
+            return tipsText.split('\n').map((line, index) => {
+              if (line.startsWith('### ')) {
+                return <h4 key={index} className="font-semibold text-gray-700 mt-4 mb-2">{line.substring(4)}</h4>;
+              }
+              if (line.startsWith('## ')) {
+                return <h3 key={index} className="font-semibold text-lg text-gray-700 mt-4 mb-2">{line.substring(3)}</h3>;
+              }
+              if (line.startsWith('- ')) {
+                return <li key={index} className="ml-4 text-sm text-gray-800">{line.substring(2)}</li>;
+              }
+              if (line.trim() === '') {
+                return <br key={index} />;
+              }
+              return <p key={index} className="mb-1 text-sm text-gray-800">{line}</p>;
+            });
+          };
+
+          // Handle getting tips for Point
+          const handleGetPointTips = async () => {
+            if (!textExtract || !question) {
+              setPointTipsMessage('Please provide both the text extract and the question to get tips.');
+              return;
+            }
+
+            setLoadingPointTips(true);
+            setPointTipsMessage('Thinking of some helpful tips...');
+
+            const prompt = `Given the following English Language text extract and question, provide concise tips for a GCSE student on how to identify strong 'Points' for their PEE analysis. Organize these tips under clear subheadings like '### Characteristics of a Strong Point', '### Connecting to the Question', and '### What to Avoid'. Use bullet points for individual tips within each subheading.
+
+            Text Extract:
+            "${textExtract}"
+            
+            Question:
+            "${question}"`;
+
+            const tips = await callGeminiApi(prompt, "point tips");
+            setPointTipsMessage(tips);
+            setLoadingPointTips(false);
+          };
+
+          // Handle getting tips for Evidence
+          const handleGetEvidenceTips = async () => {
+            if (!textExtract || !question) {
+              setEvidenceTipsMessage('Please provide both the text extract and the question to get tips on evidence.');
+              return;
+            }
+            if (!studentPEEAnswer.toLowerCase().includes('p:')) {
+              setEvidenceTipsMessage('It helps to have at least a "P: Point" drafted in your PEE answer before seeking evidence tips.');
+              return;
+            }
+
+            setLoadingEvidenceTips(true);
+            setEvidenceTipsMessage('Searching for evidence tips...');
+
+            const prompt = `Given the following English Language text extract, question, and the student's current PEE answer (specifically focusing on their point), provide concise tips for a GCSE student on how to select strong 'Evidence' (direct quotes) to support their point. Organize these tips under subheadings like '### Choosing the Right Quote', '### Integrating Evidence', and '### Common Mistakes'. Use bullet points for individual tips.
+            
+            Text Extract:
+            "${textExtract}"
+            
+            Question:
+            "${question}"
+
+            Student's PEE Answer (current draft):
+            "${studentPEEAnswer}"`;
+
+            const tips = await callGeminiApi(prompt, "evidence tips");
+            setEvidenceTipsMessage(tips);
+            setLoadingEvidenceTips(false);
+          };
+
+          // Handle getting tips for Explanation
+          const handleGetExplanationTips = async () => {
+            if (!textExtract || !question || !studentPEEAnswer) {
+              setExplanationTipsMessage('Please provide the text extract, question, and your PEE answer (with at least a Point and Evidence) to get explanation tips.');
+              return;
+            }
+            if (!studentPEEAnswer.toLowerCase().includes('p:') || !studentPEEAnswer.toLowerCase().includes('e:')) {
+                setExplanationTipsMessage('It helps to have at least a "P: Point" and "E: Evidence" drafted in your PEE answer before seeking explanation tips.');
+                return;
+            }
+
+            setLoadingExplanationTips(true);
+            setExplanationTipsMessage('Generating explanation tips...');
+
+            const prompt = `Given the following English Language text extract, question, and the student's current PEE answer (specifically focusing on their point and evidence), provide concise tips for a GCSE student on how to write a strong 'Explanation'. Organize these tips under subheadings like '### Deepening Analysis', '### Linking to Methods & Effect', and '### What to Elaborate On'. Use bullet points for individual tips.
+            
+            Text Extract:
+            "${textExtract}"
+            
+            Question:
+            "${question}"
+
+            Student's PEE Answer (current draft):
+            "${studentPEEAnswer}"`;
+
+            const tips = await callGeminiApi(prompt, "explanation tips");
+            setExplanationTipsMessage(tips);
+            setLoadingExplanationTips(false);
+          };
+
+
+          // Handle getting feedback
+          const handleGetFeedback = async () => {
+            if (!textExtract || !question || !studentPEEAnswer) {
+              setFeedbackResponse({
+                feedback: 'Please fill in all text fields (Extract, Question, and Your Full PEE Answer) to get feedback.',
+                suggestions: '',
+                grade: ''
+              });
+              return;
+            }
+
+            setLoadingFeedback(true);
+            setFeedbackResponse({
+              feedback: 'Analysing your PEE... Please wait...',
+              suggestions: '',
+              grade: ''
+            });
+
+            const prompt = `A GCSE English Language student has provided a full PEE answer. Provide constructive feedback on their attempt, specifically aligning with **WJEC Eduqas GCSE English Language mark scheme criteria for a 10-mark question (e.g., Q2/Q3 on Language/Structure)**. Structure your response as a JSON object with three fields: 'feedback', 'suggestions', and 'grade'.
+
+            For 'feedback':
+            - Focus on AO1 (identifying/selecting evidence), AO2 (analysing language/structure, effects, subject terminology), and AO4 (evaluating).
+            - Comment on the clarity and precision of the 'Point'.
+            - Assess the relevance and accuracy of the 'Evidence'.
+            - Evaluate the depth of analysis in the 'Explanation', particularly regarding the identification of writer's methods and their effects on the reader, and the use of subject terminology.
+
+            For 'suggestions':
+            - Offer clear, actionable advice for improvement, linked to the Eduqas AOs.
+            - Suggest how to strengthen analysis, integrate evidence more smoothly, or expand on effects.
+
+            For 'grade':
+            - Assign a **GCSE-style grade (e.g., "Grade 4", "Grade 6", "Grade 9")** based on the overall quality, depth, and clarity of the PEE answer as per Eduqas expectations. Justify the grade briefly based on performance against AOs.
+
+            Text Extract:
+            "${textExtract}"
+
+            Question:
+            "${question}"
+
+            Student's Full PEE Answer:
+            "${studentPEEAnswer}"`;
+
+            const result = await callGeminiApi(prompt, "feedback", true);
+
+            if (typeof result === 'object' && result !== null && 'feedback' in result) {
+              setFeedbackResponse(result);
+            } else {
+              setFeedbackResponse({
+                feedback: result || 'Failed to get structured feedback. Please try again.',
+                suggestions: '',
+                grade: 'N/A'
+              });
+            }
+            
+            setLoadingFeedback(false);
+          };
+
+          // Handle copying content to clipboard for Google Docs
+          const handleCopyToClipboard = async () => {
+            const reportContent = `
+GCSE English Language PEE Report
+
+1. Text Extract:
+${textExtract || 'No text extract provided.'}
+
+2. Question:
+${question || 'No question provided.'}
+
+3. User's PEE Answer:
+${studentPEEAnswer || 'No PEE answer provided.'}
+
+---
+
+4. AI Feedback:
+
+Feedback:
+${feedbackResponse.feedback || 'No feedback generated yet.'}
+
+Suggestions:
+${feedbackResponse.suggestions || 'No suggestions generated yet.'}
+
+Grade:
+${feedbackResponse.grade || 'N/A'}
+            `.trim();
+
+            try {
+              // Use document.execCommand('copy') as navigator.clipboard.writeText() may not work due to iFrame restrictions.
+              const textArea = document.createElement("textarea");
+              textArea.value = reportContent;
+              // Avoid scrolling to bottom by keeping it off-screen
+              textArea.style.position = "fixed";
+              textArea.style.left = "-9999px";
+              document.body.appendChild(textArea);
+              textArea.focus();
+              textArea.select();
+              document.execCommand('copy');
+              document.body.removeChild(textArea);
+
+              setCopySuccessMessage('Copied to clipboard! Paste into Google Docs.');
+              setTimeout(() => setCopySuccessMessage(''), 5000); // Clear message after 5 seconds
+            } catch (err) {
+              console.error('Failed to copy text: ', err);
+              setCopySuccessMessage('Failed to copy to clipboard. Please manually copy the text.');
+            }
+          };
+
+          // Handle chatbot question
+          const handleAskChatbot = async () => {
+            if (!textExtract || !chatQuestion) {
+              setChatResponse('Please provide the text extract and your question for the chatbot.');
+              return;
+            }
+
+            setLoadingChat(true);
+            setChatResponse('Thinking...');
+
+            const chatPrompt = `You are an expert English Language teacher. A student has provided an extract and has a question about it. Your task is to answer the question *strictly* based on the provided text extract and literary/language techniques used within it. If the question is outside the scope of the provided text or its techniques, politely decline and explain that you can only answer questions related to the given text and its analysis.
+
+            Text Extract:
+            "${textExtract}"
+
+            Original GCSE Question (for context, if relevant):
+            "${question}"
+
+            Student's Chatbot Question:
+            "${chatQuestion}"
+
+            Your Response:`;
+
+            const response = await callGeminiApi(chatPrompt, "chatbot response");
+            setChatResponse(response);
+            setLoadingChat(false);
+          };
+
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-6 flex items-center justify-center font-inter antialiased">
+              <div className="w-full max-w-4xl bg-white rounded-xl shadow-2xl p-8 space-y-8">
+                <h1 className="text-4xl font-extrabold text-center text-gray-800 mb-6">
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-indigo-600">
+                    GCSE PEE Helpsheet
+                  </span>
+                </h1>
+
+                {/* Input Section */}
+                <div className="bg-gray-50 p-6 rounded-lg shadow-inner border border-gray-200">
+                  <h2 className="text-2xl font-semibold text-gray-700 mb-4 flex items-center">
+                    <span className="mr-2 text-indigo-500">📖</span> Your Text & Question
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="text-extract" className="block text-gray-700 text-sm font-medium mb-1">
+                        Text Extract (Paste your article/story here):
+                      </label>
+                      <textarea
+                        id="text-extract"
+                        className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 h-40 resize-y"
+                        placeholder="E.g., 'The old house stood on a desolate hill, its windows like vacant eyes staring into the storm. A chilling wind whispered through the broken panes...'"
+                        value={textExtract}
+                        onChange={(e) => setTextExtract(e.target.value)}
+                      ></textarea>
+                    </div>
+                    <div>
+                      <label htmlFor="question" className="block text-gray-700 text-sm font-medium mb-1">
+                        GCSE English Language Question:
+                      </label>
+                      <input
+                        type="text"
+                        id="question"
+                        className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="E.g., 'How does the writer create a sense of suspense in this extract?'"
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* PEE Practice Section */}
+                <div className="bg-gray-50 p-6 rounded-lg shadow-inner border border-gray-200">
+                  <h2 className="text-2xl font-semibold text-gray-700 mb-4 flex items-center">
+                    <span className="mr-2 text-purple-500">✍️</span> Your Full PEE Answer
+                  </h2>
+                  <div className="space-y-4">
+                    {/* Combined PEE Input */}
+                    <div>
+                      <label htmlFor="student-pee-answer" className="block text-gray-700 text-sm font-medium mb-1">
+                        P: Point, E: Evidence, E: Explain (all in one box)
+                      </label>
+                      <textarea
+                        id="student-pee-answer"
+                        className="w-full p-3 border border-purple-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 h-48 resize-y"
+                        placeholder="Structure your answer like this:
+
+P: (Your clear point directly answering the question)
+E: (A specific, short quote to support your point, in quotation marks)
+E: (Your explanation, analysing the writer's methods and effect on the reader)
+
+You can write multiple PEE paragraphs here."
+                        value={studentPEEAnswer}
+                        onChange={(e) => setStudentPEEAnswer(e.target.value)}
+                      ></textarea>
+
+                      {/* Point Tips Button */}
+                      <button
+                        onClick={handleGetPointTips}
+                        className="mt-4 w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center mr-2"
+                        disabled={loadingPointTips}
+                      >
+                        {loadingPointTips ? (
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <LightbulbIcon className="mr-2" />
+                        )}
+                        Get Tips for My Point
+                      </button>
+
+                      {/* Evidence Tips Button */}
+                      <button
+                        onClick={handleGetEvidenceTips}
+                        className="mt-4 w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center mr-2"
+                        disabled={loadingEvidenceTips}
+                      >
+                        {loadingEvidenceTips ? (
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <LightbulbIcon className="mr-2" />
+                        )}
+                        Get Tips for My Evidence
+                      </button>
+
+                      {/* Explanation Tips Button */}
+                      <button
+                        onClick={handleGetExplanationTips}
+                        className="mt-4 w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center"
+                        disabled={loadingExplanationTips}
+                      >
+                        {loadingExplanationTips ? (
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <LightbulbIcon className="mr-2" />
+                        )}
+                        Get Tips for My Explanation
+                      </button>
+
+
+                      {pointTipsMessage && (
+                        <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-md">
+                          <h3 className="font-semibold mb-2">Tips for Your Point:</h3>
+                          <div className="whitespace-pre-wrap">{formatTipsForDisplay(pointTipsMessage)}</div>
+                        </div>
+                      )}
+                       {evidenceTipsMessage && (
+                        <div className="mt-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-md">
+                          <h3 className="font-semibold mb-2">Tips for Your Evidence:</h3>
+                          <div className="whitespace-pre-wrap">{formatTipsForDisplay(evidenceTipsMessage)}</div>
+                        </div>
+                      )}
+                      {explanationTipsMessage && (
+                        <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-md">
+                          <h3 className="font-semibold mb-2">Tips for Your Explanation:</h3>
+                          <div className="whitespace-pre-wrap">{formatTipsForDisplay(explanationTipsMessage)}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={handleGetFeedback}
+                      className="mt-6 w-full px-8 py-3 bg-purple-600 text-white font-bold rounded-lg shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center"
+                      disabled={loadingFeedback}
+                    >
+                      {loadingFeedback ? (
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <>
+                          <MessageCircleIcon className="mr-2" />
+                          Get Feedback
+                        </>
+                      )}
+                    </button>
+
+                    {/* Display Structured Feedback */}
+                    {feedbackResponse.feedback && (
+                      <div className="mt-4 p-4 bg-purple-50 border border-purple-200 text-purple-800 rounded-md">
+                        <h3 className="font-semibold text-lg mb-2">Feedback on Your PEE:</h3>
+                        
+                        <h4 className="font-medium text-purple-700 mt-3">User Response:</h4>
+                        <p className="mb-2 whitespace-pre-wrap">{studentPEEAnswer || "No PEE answer provided."}</p>
+
+                        <h4 className="font-medium text-purple-700 mt-3">Feedback:</h4>
+                        <p className="mb-2 whitespace-pre-wrap">{feedbackResponse.feedback}</p>
+
+                        <h4 className="font-medium text-purple-700 mt-3">Suggestions:</h4>
+                        <p className="mb-2 whitespace-pre-wrap">{feedbackResponse.suggestions}</p>
+                        
+                        {feedbackResponse.grade && (
+                            <>
+                                <h4 className="font-medium text-purple-700 mt-3">Grade:</h4>
+                                <p className="font-bold text-xl text-purple-900">{feedbackResponse.grade}</p>
+                            </>
+                        )}
+
+                        <button
+                            onClick={handleCopyToClipboard}
+                            className="mt-6 w-full sm:w-auto px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center"
+                        >
+                            <CopyIcon className="mr-2" />
+                            Copy Feedback for Google Docs
+                        </button>
+                        {copySuccessMessage && (
+                            <p className="mt-2 text-sm text-green-700 text-center">{copySuccessMessage}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Chatbot Section (appears after feedback) */}
+                {feedbackResponse.feedback && ( // Only show chatbot after feedback is given
+                    <div className="bg-gray-50 p-6 rounded-lg shadow-inner border border-gray-200">
+                        <h2 className="text-2xl font-semibold text-gray-700 mb-4 flex items-center">
+                            <span className="mr-2 text-blue-500">💬</span> Ask About the Text
+                        </h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="chat-question" className="block text-gray-700 text-sm font-medium mb-1">
+                                    Ask a specific question about the text or techniques used:
+                                </label>
+                                <input
+                                    type="text"
+                                    id="chat-question"
+                                    className="w-full p-3 border border-blue-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="E.g., 'What is the effect of the simile in line 5?' or 'Are there any other examples of pathetic fallacy?'"
+                                    value={chatQuestion}
+                                    onChange={(e) => setChatQuestion(e.target.value)}
+                                />
+                            </div>
+                            <button
+                                onClick={handleAskChatbot}
+                                className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out flex items-center justify-center"
+                                disabled={loadingChat || !textExtract || !chatQuestion}
+                            >
+                                {loadingChat ? (
+                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <MessageSquareIcon className="mr-2" />
+                                )}
+                                Ask About Text
+                            </button>
+
+                            {chatResponse && (
+                                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-md">
+                                    <h4 className="font-semibold mb-2">Chatbot Response:</h4>
+                                    <p className="whitespace-pre-wrap">{chatResponse}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                <footer className="text-center text-gray-500 text-sm mt-8">
+                  Designed to help you master PEE for GCSE English Language.
+                </footer>
+              </div>
+            </div>
+          );
+        };
+
+        // Render the React application
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
